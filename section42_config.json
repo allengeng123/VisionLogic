@@ -1,0 +1,32 @@
+{
+  "analysis_version": "section42-class-specific-v1",
+  "primary_population": "initial prediction-preserving source pathways grouped by model-predicted class",
+  "heldout_population": "all validation activations grouped by model-predicted class",
+  "threshold_fit": "training source pathways only; positive=min selected activation, negative=max selected activation",
+  "predicate_identity": "model + predicted class + signed physical feature + class-specific threshold",
+  "models": {
+    "vit": {
+      "representation": "ViT-B/16 penultimate classifier input",
+      "feature_dimension": 768,
+      "validation_argsort": "stable"
+    },
+    "resnet": {
+      "representation": "ResNet-50 pooled penultimate feature",
+      "feature_dimension": 2048,
+      "validation_argsort": "stable"
+    },
+    "convnext": {
+      "representation": "ConvNeXt-Base classifier input",
+      "feature_dimension": 1024,
+      "validation_argsort": "NumPy default quicksort"
+    },
+    "swin": {
+      "representation": "Swin-T classifier-head input",
+      "feature_dimension": 768,
+      "validation_argsort": "NumPy default quicksort"
+    }
+  },
+  "descriptive_frequency_cutoffs": [0.01, 0.05, 0.10, 0.25],
+  "representative_class_rule": "nearest class to the 10th, 50th, and 90th percentile of 1 - n80/observed-selected-predicates",
+  "cross_model_pairing": "none; saved activation files lack explicit shared source-image IDs"
+}

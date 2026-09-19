@@ -1,0 +1,28 @@
+{
+  "protocol": "Grad-CAM proposals to cutoff 0.10, then Score-CAM proposals to cutoff 0.10 only after Grad-CAM fails; radius-20 Gaussian-blur removal; first predicate-deactivating box union accepted; area-matched random control receives the same two-stage search opportunity",
+  "population": "same fixed sample of 100 ImageNet-1k validation images per model",
+  "vit": {
+    "eligible_predicate_tests": 276,
+    "guided_successes": 274,
+    "guided_success_rate": 0.9927536231884058,
+    "matched_random_successes": 256,
+    "matched_random_success_rate": 0.927536231884058,
+    "gradcam_failures_sent_to_scorecam": 34,
+    "scorecam_recoveries": 32,
+    "images_with_at_least_one_guided_success": 99,
+    "median_guided_occupancy_percent": 23.976602359693878,
+    "median_random_occupancy_percent": 27.861926020408163
+  },
+  "resnet": {
+    "eligible_predicate_tests": 129,
+    "guided_successes": 116,
+    "guided_success_rate": 0.8992248062015504,
+    "matched_random_successes": 105,
+    "matched_random_success_rate": 0.813953488372093,
+    "gradcam_failures_sent_to_scorecam": 34,
+    "scorecam_recoveries": 21,
+    "images_with_at_least_one_guided_success": 90,
+    "median_guided_occupancy_percent": 46.31297831632653,
+    "median_random_occupancy_percent": 60.6804049744898
+  }
+}

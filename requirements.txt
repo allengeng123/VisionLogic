@@ -1,0 +1,11 @@
+numpy>=1.25,<3
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+pillow>=10
+opencv-python>=4.8
+torch>=2.1
+torchvision>=0.16
+grad-cam>=1.5
+huggingface-hub>=0.24
+safetensors>=0.4
