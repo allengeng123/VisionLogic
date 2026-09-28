@@ -1,245 +1,185 @@
 # VisionLogic
 
-Code and compact result artifacts for **VisionLogic: Discovering and Grounding
-Decision-Relevant Visual Concepts**.
+**Discovering and Grounding Decision-Relevant Visual Concepts**
 
-VisionLogic is a post-hoc explanation framework for frozen ImageNet classifiers.
-It extracts compact numerical pathways that reproduce each model prediction,
-turns selected signed feature states into class-conditioned threshold predicates,
-analyzes predicate use across images and classes, and grounds pathway predicates
-with removal-based visual interventions.
+Chuqin Geng, Yuhe Jiang, Li Zhang, Zhaoyue Wang, Haolin Ye, Mark Zhang, Jingkai Xu, and Xujie Si
 
-## Final method in this repository
+[![CPU tests](https://github.com/allengeng123/VisionLogic/actions/workflows/tests.yml/badge.svg)](https://github.com/allengeng123/VisionLogic/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-The repository implements the version used by the current paper:
+VisionLogic explains a frozen vision model's prediction with a compact set of
+internal features, expresses their activation states as class-specific predicates,
+and grounds active, selected predicates in image regions using removal tests.
 
-1. For an input with penultimate representation `z`, decompose the predicted
-   class logit into signed per-feature contributions.
-2. Sort contributions with the model-specific ordering recorded in
-   `section42_config.json` and retain the first prefix whose partial frozen-head
-   logits reproduce the original prediction.
-3. Fit class-conditioned predicates from selected source occurrences. Positive
-   thresholds are source minima and negative thresholds are source maxima.
-4. On a new image, use the original model prediction to select the class
-   vocabulary and extract a fresh initial pathway. VisionLogic explains the
-   prediction; it does not replace the classifier.
-5. Ground active-and-selected predicates with neuron-targeted attribution.
-   Grad-CAM proposes connected-region box unions first. If that search fails,
-   Score-CAM supplies a second fixed proposal sequence. The first box union whose
-   Gaussian-blur removal deactivates the unchanged predicate is accepted.
-6. Foreground segmentation can be intersected with the accepted box for display.
-   The intervention validates the full box, not the displayed intersection.
+![VisionLogic grounding procedure](figures/VisionLogic_Grounding_Flow.png)
 
-No ordered-signature extension, rule-classifier executor, retention/sufficiency
-test, or bidirectional causal test is part of this release.
+**Start here:** [Installation](#installation) · [Explain an image](#explain-an-image) ·
+[Reproduce the analysis](docs/REPRODUCIBILITY.md) · [Data and outputs](docs/DATA.md)
 
-## Repository layout
+## What is included
 
-| Path | Purpose |
-| --- | --- |
-| `build_initial_pathway_checkpoints.py` | Extract the prediction-preserving source pathways. Historical extended checkpoints are optional and used only for a prefix audit. |
-| `visionlogic_section42_predicate_analysis.py` | Fit predicates, analyze source and held-out populations, and generate the Section 4.1 tables and figures. |
-| `check_saved_activation_accuracy.py` | Reconstruct classifier logits from saved activations and the frozen final layer. |
-| `experimental_grounding/` | Neuron attribution, proposal search, blur intervention, random controls, segmentation display, audits, and the grounding-flow figure. |
-| `results/section4_1/` | Compact numerical outputs and predicate tables used by the paper. |
-| `results/grounding/` | Paper-facing ViT and ResNet grounding summary. |
-| `figures/` | Generated 1x4 analysis figures and the grounding-flow figure. |
-| `tests/` | Unit tests for predicate logic, proposal geometry, controls, and stopping behavior. |
+- A CPU/CUDA command for explaining a user-provided image with Grad-CAM, Score-CAM fallback, and Gaussian-blur removal.
+- Checksum-verified downloads of the four frozen torchvision classifiers.
+- ImageNet activation extraction, pathway selection, predicate fitting, and held-out analysis.
+- Frozen predicate tables and compact numerical results from the earlier experimental runs.
+- Grounding evaluation scripts with area-matched random controls, regression tests, and continuous integration.
 
-## Data not included
-
-ImageNet images, saved activation matrices, torchvision weights, extracted
-pathway checkpoints, and BiRefNet weights are not redistributed. Place them
-outside Git and provide their locations through command-line arguments or the
-environment variables below.
-
-Expected activation layout:
-
-```text
-activation-root/
-  vit/train/          vit/val/
-  resnet/train/       resnet/val/
-  convnext/train/     convnext/val/
-  swin/train/         swin/val/
-```
-
-Each activation directory must contain 1,000 class files in the same sorted
-class order used during extraction. Each file stores a two-dimensional NumPy
-array of penultimate activations.
-
-Expected torchvision weights:
-
-```text
-weights/
-  vit_b_16-c867db91.pth
-  resnet50-11ad3fa6.pth
-  convnext_base-6075fbad.pth
-  swin_t-704ceda3.pth
-```
+**Protocol note:** the current manuscript specifies correctly classified source
+images and stable sorting for all four models. The earlier saved results and
+bundled predicate tables were generated with majority-predicted source groups
+and model-specific sorting. They are retained as `legacy` artifacts, not presented
+as newly reproduced manuscript-protocol results. New pathway/analysis runs default
+to `paper`; the ready-to-run image demo explicitly uses the bundled `legacy`
+thresholds. See the [protocol comparison](docs/REPRODUCIBILITY.md#protocols).
 
 ## Installation
 
-Python 3.10 or 3.11 is recommended. Install a CUDA-enabled PyTorch build that
-matches the cluster, then install the remaining dependencies:
+Use **Python 3.10–3.12** in a fresh environment. The dependency versions below are
+pinned; CPU execution works for the single-image demo and tests. Large-scale
+experiments should use an NVIDIA GPU.
 
 ```bash
+git clone https://github.com/allengeng123/VisionLogic.git
+cd VisionLogic
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
+```
+
+On Windows PowerShell, replace the activation command with
+`.\.venv\Scripts\Activate.ps1`. The remaining single-line commands work in both shells.
+
+Install **one** matching PyTorch/torchvision pair:
+
+```bash
+# CPU
+python -m pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu
+```
+
+```bash
+# NVIDIA CUDA 12.1, instead of the CPU command
+python -m pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+```
+
+Then install and check the project dependencies:
+
+```bash
 python -m pip install -r requirements.txt
+python -m pip check
 ```
 
-On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`.
+For another GPU platform, consult the [official PyTorch wheel matrix](https://pytorch.org/get-started/previous-versions/#v251).
+The package versions in this release are an installation baseline, not a claim
+that all archived experiments ran in this exact environment.
 
-## 1. Verify saved activations
+## Explain an image
 
-Run once per model:
+Download the ResNet-50 checkpoint, then run your image through the full grounding
+procedure. No ImageNet download, private notebook, segmentation model, or training
+run is needed for this example.
 
 ```bash
-python check_saved_activation_accuracy.py \
-  --model vit \
-  --data-dir /path/to/activation-root/vit/val \
-  --weights /path/to/weights/vit_b_16-c867db91.pth \
-  --notebook /path/to/visionlogic_vit.ipynb \
-  --output outputs/activation_accuracy_vit.json
+python download_weights.py --models resnet
+python explain.py --image /path/to/image.jpg --model resnet --protocol legacy --device cpu --output outputs/my-image
 ```
 
-This recomputes top-1/top-5 predictions from `zW^T+b` and separately checks the
-notebook's displayed per-class majority-consensus lines. Majority consensus is
-not classifier accuracy.
+Use `--device cuda` for GPU execution. Supported model keys are `vit`, `resnet`,
+`convnext`, and `swin`; download the corresponding weights first. Score-CAM can be
+slow on CPU because it evaluates every channel of the selected spatial layer.
 
-## 2. Extract initial pathways
+The command saves:
+
+| File | Contents |
+| --- | --- |
+| `input.png` | The exact 224 × 224 input crop seen by the model |
+| `explanation.json` | Predicted class index, selected pathway, fixed thresholds, every attempted intervention, success/failure, and input hashes |
+| `predicate_*_boxes.png` | Accepted box unions drawn on the input |
+| `predicate_*_mask.png` | Binary accepted-region mask; empty if grounding fails |
+| `predicate_*_removed.png` | Accepted blur intervention, when a predicate is deactivated |
+| `predicate_*_heatmap.npy` | Heatmap for the accepted stage, or final attempted stage on failure |
+
+Predicates without an accepted region remain in the JSON. An image can have no
+active selected predicates; this is reported explicitly. The command refuses to
+overwrite an existing output directory.
+
+After fitting thresholds with the manuscript protocol, run:
 
 ```bash
-python build_initial_pathway_checkpoints.py \
-  --activation-root /path/to/activation-root \
-  --weights-dir /path/to/weights \
-  --output-dir outputs/initial-pathways
+python explain.py --image /path/to/image.jpg --model resnet --protocol paper --predicates outputs/paper/resnet/predicate_metrics.csv.gz --device cuda --output outputs/paper-image
 ```
 
-The optional `--extended-checkpoint-dir` argument performs the historical-prefix
-audit but does not alter extracted pathways.
+## How it works
 
-## 3. Reproduce the numerical predicate analysis
+1. Compute the frozen model prediction and the exact input to its final linear layer.
+2. Rank signed feature contributions to the predicted class; keep the first prefix whose partial logits recover that prediction.
+3. Look up the predicted class's frozen predicates and retain those that are both selected and active.
+4. Build a neuron-targeted Grad-CAM map. At cutoffs 0.60, 0.55, …, 0.10, take all eight-connected components and test the union of their bounding boxes.
+5. Blur the image with radius 20 and replace only pixels inside the proposed region. Accept the first region that deactivates the same signed feature predicate at its unchanged threshold.
+6. If all Grad-CAM proposals fail, repeat the fixed schedule with Score-CAM.
 
-Run each model separately. Example for ViT:
+This explains the classifier's prediction; it does not train a replacement rule
+classifier. An accepted region supports a one-way removal test, not a claim of
+uniqueness, pixel minimality, or sufficiency. Foreground segmentation in the
+paper is a display operation, not part of the acceptance rule; the default demo
+shows the actual tested boxes.
+
+## Reproduction and development
+
+The [reproduction guide](docs/REPRODUCIBILITY.md) covers activation extraction,
+source pathways, predicate fitting, analysis figures, and the grounding benchmark.
+The [data guide](docs/DATA.md) describes ImageNet layout, checkpoint choices,
+activation formats, and the provenance of bundled results.
 
 ```bash
-python visionlogic_section42_predicate_analysis.py model \
-  --model vit \
-  --train-dir /path/to/activation-root/vit/train \
-  --val-dir /path/to/activation-root/vit/val \
-  --weights /path/to/weights/vit_b_16-c867db91.pth \
-  --phase3 outputs/initial-pathways/phase3_initial_vit.pkl \
-  --output-dir outputs/section4_1/vit
+python -m pip install -r requirements-dev.txt
+python run_tests.py
 ```
 
-Repeat for `resnet`, `convnext`, and `swin`, then combine:
+Tests cover signed thresholds, prefix selection, source-population protocols,
+connected regions, area matching, stopping/fallback behavior, and benchmark
+aggregation. They run on CPU without ImageNet or downloaded classifier weights.
+GitHub Actions runs the same suite.
 
-```bash
-python visionlogic_section42_predicate_analysis.py combine \
-  --input-dir outputs/section4_1 \
-  --output-dir outputs/section4_1/combined
-```
+| Path | Purpose |
+| --- | --- |
+| `explain.py` | Single-image grounding entry point |
+| `download_weights.py` | Download and verify exact model checkpoints |
+| `extract_activations.py` | Save final-head input features from ImageNet |
+| `build_initial_pathway_checkpoints.py` | Extract prediction-preserving source pathways |
+| `visionlogic_section42_predicate_analysis.py` | Fit predicates and generate numerical analysis; historical filename retained |
+| `check_saved_activation_accuracy.py` | Check classifier accuracy from saved features; notebook audit is optional |
+| `benchmark_report.py` | Summarize two-stage guided and matched-random results |
+| `experimental_grounding/` | Shared implementation and historical experiment scripts |
+| `results/` | Frozen legacy tables and summaries |
+| `tests/` | CPU regression tests |
 
-The checked-in compact outputs report source/held-out pathway sizes, predicate
-activation and selection frequencies, threshold retention, concentration, and
-cross-class signed-feature reuse.
-
-## 4. Reproduce grounding evaluation
-
-Set the external inputs:
-
-```bash
-export VISIONLOGIC_IMAGENET_VAL=/path/to/imagenet-val
-export VISIONLOGIC_WEIGHTS=/path/to/weights
-export VISIONLOGIC_PREDICATES=$PWD/results/section4_1/by_model
-```
-
-Run scripts from `experimental_grounding` so their local imports resolve:
-
-```bash
-cd experimental_grounding
-
-# Fixed Score-CAM proposal evaluation and matched random controls.
-python evaluate_grounding_random100.py --models vit
-python evaluate_grounding_random100.py --models resnet
-
-# Neuron-targeted Grad-CAM proposal evaluation to the 0.10 lower bound.
-python evaluate_gradcam_random100_four_models.py --model vit
-python evaluate_gradcam_random100_four_models.py --model resnet
-
-# Add Score-CAM proposals only for Grad-CAM failures and produce comparisons.
-python extend_scorecam_lower010.py --model vit
-python extend_scorecam_lower010.py --model resnet
-python report_gradcam_random100_four_models.py
-```
-
-The acceptance rule always evaluates the same physical neuron, sign, and frozen
-class-conditioned threshold. Attribution proposes regions; the removal test
-determines acceptance. The matched random arm uses the same proposal areas and
-two-stage opportunity.
-
-The paper-facing summary is in
-`results/grounding/paper_grounding_summary.json`. It records 274/276 successful
-ViT predicate tests and 116/129 successful ResNet tests. At least one accepted
-predicate occurred on 99/100 ViT images and 90/100 ResNet images. Median accepted
-occupancy was 24.0% for ViT and 46.3% for ResNet, compared with 27.9% and 60.7%
-for the matched random control.
-
-Regenerate the Section 3.3 flow figure from the included verified example
-panels and editable layout code:
-
-```bash
-python experimental_grounding/make_grounding_flow_figure.py
-```
-
-This writes both PDF and PNG versions under `figures/`.
-
-## 5. Tests
-
-```bash
-export PYTHONPATH=$PWD/experimental_grounding
-python -m unittest discover -s tests -p 'test_grounding_random100.py' -v
-python -m unittest discover -s tests -p 'test_core.py' -v
-```
-
-Full numerical reproduction requires the external model and data artifacts.
-Geometry and predicate tests run without ImageNet.
-
-## Reproducibility notes
-
-- Source and held-out populations are grouped by the frozen model prediction.
-- Thresholds are fitted from selected source occurrences and frozen on held-out
-  data.
-- The source inequality is satisfied by construction because the threshold is an
-  extremum over selected source occurrences.
-- Identical signed features may support different class-conditioned predicates
-  because thresholds are class specific.
-- Cross-class reuse counts signed feature identities, not a single shared
-  predicate.
-- The grounding experiment is a one-way removal test. It does not claim that the
-  accepted region is unique, pixel-minimal, sufficient in isolation, or a formal
-  causal guarantee.
-- Foreground segmentation is for visualization and does not replace the accepted
-  box as the tested region.
-
-## Paper result snapshot
-
-The checked-in `model_summary_table.csv` reports the following medians:
-
-| Model | Source active / selected | Held-out active / selected | Vocabulary eligibility | Conditional threshold retention |
-| --- | ---: | ---: | ---: | ---: |
-| ViT-B/16 | 7 / 3 | 7 / 3 | 98.566% | 97.357% |
-| ResNet-50 | 2 / 1 | 2 / 1 | 99.512% | 98.927% |
-| ConvNeXt-Base | 9 / 4 | 9 / 4 | 98.920% | 98.359% |
-| Swin-T | 15 / 7 | 15 / 7 | 99.468% | 98.428% |
-
-The highlighted reuse findings are also retained: signed feature `(817,+)` in
-ConvNeXt is selected in at least 1% of source examples in 534 classes, and signed
-feature `(606,+)` in Swin in 327 classes.
+Some historical scripts require experiment-specific manifests or optional models.
+See [experimental_grounding/README.md](experimental_grounding/README.md) before
+using them; `run_demo.py` is an older integrated-gradients/inpainting experiment,
+not the current paper's entry point.
 
 ## Citation
 
-Citation metadata will be added when the paper becomes public. Until then,
-please cite the repository and manuscript title in private research use.
+For the current manuscript/code release:
+
+```bibtex
+@misc{geng2026visionlogic,
+  title = {VisionLogic: Discovering and Grounding Decision-Relevant Visual Concepts},
+  author = {Geng, Chuqin and Jiang, Yuhe and Zhang, Li and Wang, Zhaoyue and Ye, Haolin and Zhang, Mark and Xu, Jingkai and Si, Xujie},
+  year = {2026},
+  howpublished = {Research manuscript and code},
+  url = {https://github.com/allengeng123/VisionLogic}
+}
+```
+
+The [earlier arXiv manuscript](https://arxiv.org/abs/2503.10547) has a different
+title and author list; use the metadata of the version you actually cite.
+
+## License and contact
+
+The repository code is released under the [MIT License](LICENSE). ImageNet,
+third-party model weights, and third-party software retain their own terms.
+
+For usage questions and reproducible bug reports, open a
+[GitHub issue](https://github.com/allengeng123/VisionLogic/issues).
+Research contacts: Chuqin Geng (`chuqin.geng@mail.mcgill.ca`) and Xujie Si (`six@cs.toronto.edu`).

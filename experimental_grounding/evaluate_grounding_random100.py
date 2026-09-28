@@ -190,12 +190,6 @@ def provenance():
         assert json.loads(config_path.read_text()) == json.loads(json.dumps(configuration))
     else:
         write_json(config_path, configuration)
-    paper_path = OUT / 'manuscript_hashes_before.json'
-    if not paper_path.exists():
-        paper = WORKSPACE / 'iclr2027_submission/VisionLogic_Working'
-        paths = [p for p in paper.rglob('*') if p.is_file()]
-        paths += [WORKSPACE/'output/pdf/VisionLogic_ScoreCAM_BoxOnly_Grounding.pdf', WORKSPACE/'output/VisionLogic_ScoreCAM_BoxOnly_Grounding_Overleaf.zip']
-        write_json(paper_path, {str(p.relative_to(WORKSPACE)):digest(p) for p in paths})
 
 
 def run_model(name, manifest, limit=None):

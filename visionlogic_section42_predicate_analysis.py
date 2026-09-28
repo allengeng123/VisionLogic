@@ -182,7 +182,9 @@ def write_rows(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def source_index(train_files, weights, bias):
+def source_index(train_files, weights, bias, protocol='legacy'):
+    if protocol not in ('paper', 'legacy'):
+        raise ValueError('protocol must be paper or legacy')
     mapping = {}
     raw_rows = 0
     majority_rows_before_overwrite = 0
@@ -190,15 +192,17 @@ def source_index(train_files, weights, bias):
         matrix = load_matrix(path)
         predictions = np.argmax(matrix @ weights.T + bias, axis=1)
         values, counts = np.unique(predictions, return_counts=True)
-        majority = int(values[np.argmax(counts)])
+        majority = label if protocol == 'paper' else int(values[np.argmax(counts)])
         selected_indices = np.flatnonzero(predictions == majority)
+        raw_rows += len(matrix)
+        if not len(selected_indices):
+            continue
         mapping[majority] = {
             "path": path,
             "source_label": label,
             "indices": selected_indices,
             "majority_class": majority,
         }
-        raw_rows += len(matrix)
         majority_rows_before_overwrite += len(selected_indices)
         if (label + 1) % 100 == 0:
             print(f"indexed train files {label + 1}/1000", flush=True)
@@ -274,6 +278,8 @@ def analyze_model(args) -> int:
     output.mkdir(parents=True, exist_ok=True)
     started = time.time()
     weight_key, bias_key, sort_kind = MODEL_HEADS[args.model]
+    if args.protocol == 'paper':
+        sort_kind = 'stable'
     state = torch.load(args.weights, map_location="cpu", weights_only=True)
     weights = state[weight_key].detach().cpu().numpy()
     bias = state[bias_key].detach().cpu().numpy()
@@ -282,10 +288,14 @@ def analyze_model(args) -> int:
     val_files = activation_files(args.val_dir)
     with args.phase3.open("rb") as handle:
         payload = pickle.load(handle)
+    if payload.get('protocol', 'legacy') != args.protocol:
+        raise ValueError('Checkpoint protocol differs from --protocol; rebuild pathways for the requested protocol.')
+    if payload.get('weights_sha256') and payload['weights_sha256'] != sha256(args.weights):
+        raise ValueError('Classifier weights differ from those used to extract the pathways.')
     pathways = {int(key): value for key, value in payload["resolved_pruned_dataset"].items()}
 
     print(f"{args.model}: indexing training prediction populations", flush=True)
-    sources, raw_train_rows, pre_overwrite_rows = source_index(train_files, weights, bias)
+    sources, raw_train_rows, pre_overwrite_rows = source_index(train_files, weights, bias, args.protocol)
     if set(pathways) != set(sources):
         raise RuntimeError(
             f"Checkpoint/source classes differ: missing={sorted(set(pathways)-set(sources))[:10]}, "
@@ -641,6 +651,7 @@ def analyze_model(args) -> int:
     image_summary = finalize_image_values(image_values)
     summary = {
         "model": args.model,
+        "protocol": args.protocol,
         "environment": {
             "host": platform.node(),
             "python": sys.version,
@@ -662,7 +673,7 @@ def analyze_model(args) -> int:
             "positive_activation": "activation >= minimum selected-source activation for that class/predicate",
             "negative_activation": "activation <= maximum selected-source activation for that class/predicate",
             "selection": "signed feature occurs in the extracted prediction-supporting pathway",
-            "train_population": "source rows retained by majority-prediction selection and present in the initial-pathway checkpoint",
+            "train_population": "correctly classified training images" if args.protocol == 'paper' else "majority-prediction groups; last group wins on class collision",
             "validation_population": "all held-out rows, grouped by model-predicted class; pathways conditioned on that prediction",
         },
         "population": {
@@ -726,6 +737,9 @@ def analyze_all(args) -> int:
     figures.mkdir(exist_ok=True)
     models = args.models
     summaries = {model: json.loads((args.input_dir / model / "summary.json").read_text()) for model in models}
+    protocols = {summary.get('protocol', 'legacy') for summary in summaries.values()}
+    if len(protocols) != 1:
+        raise ValueError('Cannot combine results from different protocols.')
 
     summary_rows = []
     for model, data in summaries.items():
@@ -923,6 +937,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     model = subparsers.add_parser("model")
     model.add_argument("--model", choices=sorted(MODEL_HEADS), required=True)
+    model.add_argument("--protocol", choices=['paper', 'legacy'], default='paper')
     model.add_argument("--train-dir", type=Path, required=True)
     model.add_argument("--val-dir", type=Path, required=True)
     model.add_argument("--weights", type=Path, required=True)

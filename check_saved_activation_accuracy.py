@@ -54,7 +54,7 @@ def main() -> int:
     parser.add_argument("--model", choices=sorted(HEAD_KEYS), required=True)
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--weights", type=Path, required=True)
-    parser.add_argument("--notebook", type=Path, required=True)
+    parser.add_argument("--notebook", type=Path, help="Optional historical notebook transcript for a consensus audit")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -63,7 +63,7 @@ def main() -> int:
     state = torch.load(args.weights, map_location="cpu", weights_only=True)
     weights = state[weight_key].detach().cpu().numpy()
     bias = state[bias_key].detach().cpu().numpy()
-    documented = notebook_consensus(args.notebook)
+    documented = notebook_consensus(args.notebook) if args.notebook else {}
     files = sorted(
         path
         for path in args.data_dir.iterdir()
@@ -150,8 +150,8 @@ def main() -> int:
             "activation_shapes": sorted(shapes),
             "weights": str(args.weights.resolve()),
             "weights_sha256": sha256(args.weights),
-            "notebook": str(args.notebook.resolve()),
-            "notebook_sha256": sha256(args.notebook),
+            "notebook": str(args.notebook.resolve()) if args.notebook else None,
+            "notebook_sha256": sha256(args.notebook) if args.notebook else None,
         },
         "label_policy": "zero-based class index from lexicographically sorted ImageNet synset filenames",
         "prediction_policy": "argmax(X @ W.T + b); top-5 from the five largest logits",
@@ -164,6 +164,7 @@ def main() -> int:
             "macro_class_top1_accuracy": float(np.mean(class_top1_rates)),
         },
         "notebook_consensus": {
+            "transcript_comparison_performed": args.notebook is not None,
             "definition": "per-file fraction assigned to that file's majority predicted class",
             "majority_selected_rows": majority_total,
             "micro_consensus_rate": majority_total / total,

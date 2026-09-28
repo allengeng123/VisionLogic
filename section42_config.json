@@ -1,4 +1,6 @@
 {
+  "protocol": "legacy",
+  "scope": "Configuration of the bundled archived result tables; new CLI runs default to the manuscript paper protocol",
   "analysis_version": "section42-class-specific-v1",
   "primary_population": "initial prediction-preserving source pathways grouped by model-predicted class",
   "heldout_population": "all validation activations grouped by model-predicted class",

@@ -29,15 +29,17 @@ def sha256(path: Path) -> str:
 
 
 def build(model: str, train_dir: Path, weights_path: Path,
-          output_path: Path, extended_path: Path | None = None) -> dict:
+          output_path: Path, extended_path: Path | None = None, protocol: str = 'paper') -> dict:
     started = time.time()
     weight_key, bias_key, sort_kind = MODEL_HEADS[model]
+    if protocol == 'paper':
+        sort_kind = 'stable'
     state = torch.load(weights_path, map_location='cpu', weights_only=True)
     weights = state[weight_key].detach().cpu().numpy()
     bias = state[bias_key].detach().cpu().numpy()
     dimension = int(weights.shape[1])
     files = activation_files(train_dir)
-    sources, raw_rows, pre_overwrite_rows = source_index(files, weights, bias)
+    sources, raw_rows, pre_overwrite_rows = source_index(files, weights, bias, protocol)
     extended = None
     if extended_path is not None:
         with extended_path.open('rb') as handle:
@@ -76,6 +78,8 @@ def build(model: str, train_dir: Path, weights_path: Path,
     extension_lengths_array = np.asarray(extension_lengths, dtype=np.int64)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
+        'protocol': protocol,
+        'weights_sha256': sha256(weights_path),
         # Compatibility key used by the existing analysis script. These values
         # are initial pathways and have not undergone conflict resolution.
         'resolved_pruned_dataset': initial,
@@ -90,6 +94,7 @@ def build(model: str, train_dir: Path, weights_path: Path,
     unique, counts = np.unique(extension_lengths_array, return_counts=True)
     return {
         'model': model,
+        'protocol': protocol,
         'classes': len(initial),
         'images': images,
         'dimension': dimension,
@@ -112,6 +117,8 @@ def build(model: str, train_dir: Path, weights_path: Path,
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--models', nargs='+', choices=list(MODEL_HEADS), default=list(MODEL_HEADS))
+    parser.add_argument('--protocol', choices=['paper', 'legacy'], default='paper')
     parser.add_argument('--output-dir', type=Path, default=Path('initial-pathway-checkpoints'))
     parser.add_argument('--weights-dir', type=Path, required=True,
                         help='Directory containing torchvision model weight files.')
@@ -139,8 +146,10 @@ def main() -> None:
     }
     reports = []
     for model, (train, weights, extended) in specs.items():
+        if model not in args.models:
+            continue
         output = args.output_dir/f'phase3_initial_{model}.pkl'
-        reports.append(build(model, train, weights, output, extended))
+        reports.append(build(model, train, weights, output, extended, args.protocol))
         (args.output_dir/'manifest.json').write_text(json.dumps(reports, indent=2), encoding='utf-8')
         print(json.dumps(reports[-1], indent=2), flush=True)
 

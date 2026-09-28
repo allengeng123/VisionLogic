@@ -118,9 +118,11 @@ def load_predicates(path):
             result[key] = p
     return result
 
-def original_prefix(z, predicted, weights, bias, name):
+def original_prefix(z, predicted, weights, bias, name, protocol='legacy'):
     """Same minimum-sufficient prefix/order as the existing Section 4.2 script."""
-    kind = 'stable' if name in ('vit', 'resnet') else 'quicksort'
+    if protocol not in ('paper', 'legacy'):
+        raise ValueError('protocol must be paper or legacy')
+    kind = 'stable' if protocol == 'paper' or name in ('vit', 'resnet') else 'quicksort'
     ranked = np.argsort(z * weights[predicted], kind=kind)[::-1]
     partial = bias.copy()
     result = []

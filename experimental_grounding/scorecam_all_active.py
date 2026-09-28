@@ -31,7 +31,7 @@ def color(i):
 
 @torch.no_grad()
 def masked_scores(model,image):
-    x=image_tensor(image,'cuda');captured=[]
+    x=image_tensor(image,model.device);captured=[]
     reshape={'vit':reshape_vit,'swin':reshape_swin}.get(model.name,lambda t:t)
     layer=model.net.get_submodule(LAYERS[model.name])
     hook=layer.register_forward_hook(lambda mod,inputs,out:captured.append(reshape(out).detach().clone()))

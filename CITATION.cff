@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Please cite the manuscript and this code when using VisionLogic."
+title: "VisionLogic: Discovering and Grounding Decision-Relevant Visual Concepts"
+type: software
+authors:
+  - family-names: Geng
+    given-names: Chuqin
+  - family-names: Jiang
+    given-names: Yuhe
+  - family-names: Zhang
+    given-names: Li
+  - family-names: Wang
+    given-names: Zhaoyue
+  - family-names: Ye
+    given-names: Haolin
+  - family-names: Zhang
+    given-names: Mark
+  - family-names: Xu
+    given-names: Jingkai
+  - family-names: Si
+    given-names: Xujie
+repository-code: "https://github.com/allengeng123/VisionLogic"
+license: MIT

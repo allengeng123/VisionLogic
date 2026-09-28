@@ -97,7 +97,7 @@ def main():
     sample=json.loads((ORIGINAL/'sample.json').read_text())['images'];assert len(sample)==100
     sources=[Path(__file__),Path(__file__).with_name('core.py'),Path(__file__).with_name('compare_neuron_cams.py'),
         Path(__file__).with_name('evaluate_grounding_random100.py'),Path(__file__).with_name('render_heatmap_components.py')]
-    protected=sources+[ORIGINAL/'summary.json']+[ORIGINAL/name/f'{e["image_id"]}.json' for e in sample]
+    protected=sources+[ORIGINAL/name/f'{e["image_id"]}.json' for e in sample]
     hashes={str(p):digest(p) for p in protected}
     config=dict(model=name,method='Library neuron-targeted Grad-CAM',layer=LAYERS[name],images=[e['image_id'] for e in sample],
         sample='Same canonical seed-42 random-100 images; no resampling',targets='All original J_c(x), exact signed classifier-head input neurons',
